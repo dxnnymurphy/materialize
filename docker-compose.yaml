@@ -2,11 +2,16 @@ version: '3.7'
 services:
   materialized:
     image: materialize/materialized:v0.26.3
-    #command: -w1 --disable-telemetry
     healthcheck:
       { test: curl -f localhost:6875, interval: 1s, start_period: 30s }
     ports:
       - 6875:6875
+  materialized-bootstrap:
+    build:
+      context: $PWD
+      dockerfile: .hack/build/docker/Dockerfile
+    depends_on:
+    - materialized
   adminer:
     image: adminer:4.6.2
     restart: always

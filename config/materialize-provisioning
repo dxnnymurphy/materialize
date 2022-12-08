@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+#!/bin/bash
+SCRIPT_DIRNAME=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+SCRIPT_BASENAME=$( basename "${BASH_SOURCE[0]}" )
+HOST=${2:-localhost}
+PORT=${3:-6875}
+USER=${4:-materialize}
+DB=${5:-materialize}
+PrintConfig() {
+    echo "Connecting to $DB on instance $USER@$HOST:$PORT..."
+}
+PrintHeader() {
+    echo
+    echo "======================================================================================"
+    echo "kc-dataengineering-vizualisation-materialize"
+    echo "======================================================================================"
+    echo
+    echo "## Authors"
+    echo "    - KC Data Engineering (kcde@keplercheuvreux.com)"
+    echo
+    echo "Kepler Cheuvreux, 2022"
+    echo "======================================================================================"
+    echo
+}
+PrintHelp() {
+    echo
+    echo "## Allowed subcommands:"
+    echo "    --run"
+    echo "    Optional variables: HOST PORT USER DB"
+    echo
+}
+
+CreateSources() {
+    echo "Creating Sources..."
+    psql -U $USER -h $HOST -p $PORT $DB -c "CREATE SOURCE source_kafka_local_dev_alpaca_crypto_test_1 FROM KAFKA BROKER 'redpanda:29092' TOPIC 'dev_alpaca_crypto_test_1' FORMAT BYTES"
+}
+
+CreateViews() {
+    echo "Creating Views..."
+    psql -U $USER -h $HOST -p $PORT $DB -c "CREATE MATERIALIZED VIEW df_source_kafka_local_dev_alpaca_crypto_test_1_raw AS SELECT convert_from(data, 'utf8')::jsonb AS json FROM source_kafka_local_dev_alpaca_crypto_test_1"
+    psql -U $USER -h $HOST -p $PORT $DB -c "CREATE MATERIALIZED VIEW df_source_kafka_local_dev_alpaca_crypto_test_1_parsed_1 AS SELECT DISTINCT ON (ID) (json->'spec'->'data'->>'t')::TIMESTAMP AS Timestamp,
+     json->'spec'->'data'->'currency' AS Currency, json->'spec'->'data'->'p' AS Price, json->'spec'->'data'->'s' AS Qty, json->'spec'->'data'->'i' AS ID, json->'spec'->'data'->'tks' AS TakerSide
+     FROM df_source_kafka_local_dev_alpaca_crypto_test_1_raw"
+}
+
+main() {
+    PrintHeader
+    if [ -z "$1" ] || [ "$1" == "--help" ]; then
+        PrintHelp
+        exit 0
+    fi
+    subcommand=$1
+    shift
+    case $subcommand in
+	    --run)
+		PrintConfig
+        sleep 10
+	    CreateSources
+		CreateViews
+            ;;
+    esac
+}
+if [ "${BASH_SOURCE[0]}" == "$0" ]; then
+    main $@
+fi
